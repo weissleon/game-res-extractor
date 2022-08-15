@@ -3,6 +3,8 @@ const puppeteer = require("puppeteer");
 const path = require("path");
 const readline = require("readline");
 const fs = require("fs");
+const os = require("os");
+const downloadsFolder = require("downloads-folder");
 
 function askQuestion(query, readline) {
   const rl = readline.createInterface({
@@ -53,7 +55,7 @@ async function launchBrowser() {
   const browser = await puppeteer.launch({
     executablePath:
       typeof process.pkg === "undefined"
-        ? path.join(__dirname, "assets/chrome-win/chrome")
+        ? puppeteer.executablePath()
         : "./chromium/chrome",
   });
 
@@ -112,6 +114,13 @@ async function extractGameDesc() {
   console.clear();
   console.log(`Loading Game Description for "${title_choice[0]}"`);
   await page.goto(title_choice[1]);
+
+  if (page.url().includes("agecheck")) {
+    await page.select("#ageYear", "1950");
+    await page.click("#view_product_page_btn");
+    await page.waitForNetworkIdle();
+  }
+
   const desc = await page.$eval("#game_area_description", (el) => {
     return el.innerText.replace(/\n+/g, "\n");
   });
@@ -119,6 +128,16 @@ async function extractGameDesc() {
 
   console.clear();
   console.log(`Description:\n\n${desc}`);
+  fs.writeFileSync(
+    path.join(downloadsFolder(), `[STORE]_${gameTitle}.txt`),
+    desc,
+    { encoding: "utf8" }
+  );
+
+  console.log(
+    "\n\nFile Exported:",
+    path.join(downloadsFolder(), `[STORE]_${gameTitle}.txt`)
+  );
 }
 
 async function loadSource() {
@@ -132,9 +151,9 @@ async function loadSource() {
 
   let source = null;
   try {
-    source = fs.readFileSync(srcPath, { encoding: "utf8" }).split("\n");
+    source = fs.readFileSync(srcPath, { encoding: "utf8" }).split(/\r?\n/);
   } catch (error) {
-    console.error("Invalid File Path");
+    console.error("\x1b[31m", "Invalid File Path", "\x1b[37m");
   }
 
   // const source = [
@@ -198,11 +217,29 @@ async function extractMTPapago() {
   const source = await loadSource();
   const { browser, page } = await launchBrowser();
 
+  let translation = "";
   for (const [index, src] of source.entries()) {
     console.log(`[Translating ${index + 1}/${source.length}]`);
+    console.log("Source:", src);
+    if (src === "") {
+      console.log("Result:", "" + "\n");
+      translation += "\n";
+      continue;
+    }
     const text = await translateWithPapago(page, src);
-    console.log(text + "\n");
+    console.log("Result:", text + "\n");
+    translation += text + "\n";
   }
+
+  translation = translation.slice(0, -1);
+
+  fs.writeFileSync(path.join(downloadsFolder(), "MT-Papago.txt"), translation, {
+    encoding: "utf8",
+  });
+
+  console.log(
+    `File Exported to ${path.join(downloadsFolder(), "MT-Papago.txt")}`
+  );
   await browser.close();
 }
 
@@ -210,12 +247,29 @@ async function extractMTGoogle() {
   const source = await loadSource();
   const { browser, page } = await launchBrowser();
 
+  let translation = "";
   for (const [index, src] of source.entries()) {
     console.log(`[Translating ${index + 1}/${source.length}]`);
+    console.log("Source:", src);
+    if (src === "") {
+      console.log("Result:", "" + "\n");
+      translation += "\n";
+      continue;
+    }
     const text = await translateWithGoogle(page, src);
-    console.log(text + "\n");
+    console.log("Result:", text + "\n");
+    translation += text + "\n";
   }
 
+  translation = translation.slice(0, -1);
+
+  fs.writeFileSync(path.join(downloadsFolder(), "MT-Google.txt"), translation, {
+    encoding: "utf8",
+  });
+
+  console.log(
+    `File Exported to ${path.join(downloadsFolder(), "MT-Google.txt")}`
+  );
   await browser.close();
 }
 
